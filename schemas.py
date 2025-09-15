@@ -7,8 +7,8 @@ class SpeakerData(BaseModel):
     speaker_name:str=Field(default=None, description="The name of the speaker")
     designation: str = Field(default=None, description="The designation of the speaker")
     inspiration: str = Field(default = None, description = "What inspiration can one draw from the speaker")
-    purpose_of_speech:str = Field(default=None, description='The purpose of the speech')
-    script_of_speech:str = Field(default=None, description='The script of the speaker')
+    purpose_of_speech: str = Field(default=None, description='The purpose of the speech')
+    script_of_speech: str = Field(default=None, description='The script of the speaker')
 
 class SpeakerName(BaseModel):
     speaker_name:str = Field(default = None, description = "The name of the speaker")
@@ -24,6 +24,11 @@ class Script(BaseModel):
     speakers_names: List[SpeakerName]
     speakers_data: List[SpeakerData]
 
+class Remarks(BaseModel):
+    """Provide remakrs and detect speech end"""
+    remarks: str = Field(default = None, description="Acknowledgement and complimentary remakrs based on user's speech")
+
+    end_of_speech: bool = Field(default = False, description="Boolean flag indicating if the speech is ended or not" )
 
 
 # initialize state for MoC agent
@@ -37,5 +42,10 @@ class State(BaseModel):
     purpose:str
     current_speaker_id: int
     speakers_names: List
+    current_speaker_remarks: str
+    ceremony_summary: str
     speakers_data: List
-    phase: Literal["prepare", "initiate", "listen", "speeches", "remarks" "end"]
+    phase: Literal["prepare", "initiate","introduce", "listen", "speeches", "remarks", "end"]
+
+    class Config:
+        arbitrary_types_allowed = True

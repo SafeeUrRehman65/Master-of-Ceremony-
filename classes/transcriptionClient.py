@@ -36,7 +36,7 @@ class TranscriptionClient:
 
         while True:
             try:
-                chunk = queue.get(chunk, timeout=10)
+                chunk = queue.get(timeout=10)
                 self.fireworks_ws.send(chunk, opcode = websocket.ABNF.OPCODE_BINARY)
                 time.sleep(0.05)
             except Empty:
@@ -72,7 +72,7 @@ class TranscriptionClient:
                 with self.lock:
 
                     self.segments =  {segment["id"]: segment["text"] for segment in data["segments"]}
-                    self.state = ' '.join(self.state.values())
+                    self.state = ' '.join(self.segments.values())
                     self.display_transcription()
 
         except json.JSONDecodeError:

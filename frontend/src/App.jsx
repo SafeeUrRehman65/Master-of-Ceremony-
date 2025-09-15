@@ -1,29 +1,80 @@
 import { useEffect, useRef, useState } from "react";
 import { useMicVAD } from "@ricky0123/vad-react";
+import { handleAudioError } from "./utils/utilities";
 import "./App.css";
 
-export default function App() {
+export default function MoC() {
   const vadRef = useRef(null);
   const websocketRef = useRef(null);
+  const audioRef = useRef(null);
+
   useEffect(() => {
-    const websocket = new WebSocket("http://localhost:8080/ws");
+    const websocket = new WebSocket("ws://localhost:8080/ws");
+
     websocketRef.current = websocket;
 
     websocketRef.current.onopen = () => {
       console.log("Connection established with websocket successfully");
     };
 
+    // attach an onerror event listener to audio source
+    if (audioRef.current) {
+      audioRef.current.onerror = () => {};
+    }
     websocket.onmessage = (event) => {
       const response_data = JSON.parse(event.data);
-      const phase = response_data.phase;
-      switch (phase) {
-        case "chunk":
-          break;
+      const type = response_data.type;
+      switch (type) {
+        case "audio_url":
+          const audio_url = response_data.audio_url;
+          if (audioRef.current) {
+            let audioFinished;
+
+            audioRef.current.src = audio_url;
+            audioRef.current.oncanplay = () => {
+              audioRef.current
+                .play()
+                .then(() => console.log("Playing audio"))
+                .catch((error) => console.error("Playback failed:", error));
+            };
+
+            audioRef.current.onended = () => {
+              console.log("Audio finished playing naturally");
+              // flag to send backend to notify audio playback ended
+              audioFinished = true;
+              if (
+                websocketRef.current &&
+                websocketRef.current.readyState === WebSocket.OPEN
+              ) {
+                websocketRef.current.send(
+                  JSON.stringify({
+                    audioFinished: audioFinished,
+                  })
+                );
+                audioFinished = false;
+              }
+            };
+            audioRef.current.onerror = handleAudioError;
+          }
       }
     };
-  });
+
+    return () => {
+      if (websocketRef.current) {
+        websocketRef.current.close();
+        websocketRef.current = null;
+      }
+
+      if (audioRef.current) {
+        audioRef.current.onerror = null;
+      }
+    };
+  }, []);
+
   const vad = useMicVAD({
     startOnLoad: false,
+    baseAssetPath: "/",
+    onnxWASMBasePath: "/",
     onSpeechStart: () => {},
     onFrameProcessed: ({ isSpeech, notSpeech }, frame) => {
       if (vad.userSpeaking) {
@@ -40,7 +91,6 @@ export default function App() {
             );
           }
         }
-        websocketRef.current.send(frame);
       }
     },
   });
@@ -63,11 +113,14 @@ export default function App() {
         <p className="font-medium text-xl">Master of Ceremony</p>
       </div>
       <button
-        onClick={vadRef.current.start()}
+        onClick={() => {
+          vadRef.current.start();
+        }}
         className="px-3 py-2 bg-blue-300 hover:bg-pink-500 rounded-md cursor-pointer"
       >
         Click here to start the ceremony
       </button>
+      <audio className="hidden" ref={audioRef}></audio>
     </div>
   );
 }
