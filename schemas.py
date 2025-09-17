@@ -25,10 +25,10 @@ class Script(BaseModel):
     speakers_data: List[SpeakerData]
 
 class Remarks(BaseModel):
-    """Provide remakrs and detect speech end"""
+    """Provide remakrs and detects speech"""
     remarks: str = Field(default = None, description="Acknowledgement and complimentary remakrs based on user's speech")
 
-    end_of_speech: bool = Field(default = False, description="Boolean flag indicating if the speech is ended or not" )
+    is_speech: bool = Field(default = False, description="Boolean flag indicating whether speech is present or not")
 
 
 # initialize state for MoC agent

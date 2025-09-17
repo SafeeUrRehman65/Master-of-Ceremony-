@@ -7,6 +7,8 @@ export default function MoC() {
   const vadRef = useRef(null);
   const websocketRef = useRef(null);
   const audioRef = useRef(null);
+  const [notification, setNotification] = useState(" ");
+  const speakerWaitingTimeoutRef = useRef(null);
 
   useEffect(() => {
     const websocket = new WebSocket("ws://localhost:8080/ws");
@@ -23,8 +25,66 @@ export default function MoC() {
     }
     websocket.onmessage = (event) => {
       const response_data = JSON.parse(event.data);
+      console.log("Data from backend", response_data);
       const type = response_data.type;
       switch (type) {
+        case "current_state":
+          const current_state_message = response_data.message;
+          if (current_state_message) {
+            setNotification(current_state_message);
+            if (response_data.phase === "listen") {
+              let speakingCheckInterval = null;
+
+              // check if user has started speaking
+
+              const checkSpeaking = () => {
+                console.log("User speaking", vadRef.current.userSpeaking);
+                if (!vadRef.current.userSpeaking) {
+                  setNotification("Kindly speak, audience is waiting...");
+                  if (!speakerWaitingTimeoutRef.current) {
+                    speakerWaitingTimeoutRef.current = setTimeout(() => {
+                      setNotification(
+                        "Speaker is unavailable, moving on to the next speaker"
+                      );
+                      // notify the server that the speaker is unavailable
+                      const response_data = {
+                        speakerAvailable: false,
+                      };
+                      if (
+                        websocketRef.current &&
+                        websocketRef.current.readyState === WebSocket.OPEN
+                      ) {
+                        websocketRef.current.send(
+                          JSON.stringify(response_data)
+                        );
+                      }
+
+                      // clear up interval and timeout
+                      clearInterval(speakingCheckInterval);
+                      speakingCheckInterval = null;
+
+                      clearTimeout(speakerWaitingTimeoutRef.current);
+                      speakerWaitingTimeoutRef.current = null;
+                    }, 30000); // 30s waiting time
+                  }
+                } else {
+                  if (speakerWaitingTimeoutRef.current) {
+                    // clear timeout and cleanup
+                    clearTimeout(speakerWaitingTimeoutRef.current);
+                    speakerWaitingTimeoutRef.current = null;
+                  }
+                  if (notification !== current_state_message) {
+                    setNotification(current_state_message);
+                  }
+                }
+              };
+
+              if (!speakingCheckInterval) {
+                speakingCheckInterval = setInterval(checkSpeaking, 1000);
+              }
+            }
+          }
+          break;
         case "audio_url":
           const audio_url = response_data.audio_url;
           if (audioRef.current) {
@@ -56,6 +116,7 @@ export default function MoC() {
             };
             audioRef.current.onerror = handleAudioError;
           }
+          break;
       }
     };
 
@@ -73,9 +134,13 @@ export default function MoC() {
 
   const vad = useMicVAD({
     startOnLoad: false,
-    baseAssetPath: "/",
-    onnxWASMBasePath: "/",
-    onSpeechStart: () => {},
+    onSpeechStart: () => {
+      console.log("Speech started");
+    },
+    onnxWASMBasePath:
+      "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/",
+    baseAssetPath:
+      "https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.27/dist/",
     onFrameProcessed: ({ isSpeech, notSpeech }, frame) => {
       if (vad.userSpeaking) {
         // convert to pcm 16 audio chunks
@@ -120,6 +185,7 @@ export default function MoC() {
       >
         Click here to start the ceremony
       </button>
+      <p className="font-medium text-xl">{notification}</p>
       <audio className="hidden" ref={audioRef}></audio>
     </div>
   );
