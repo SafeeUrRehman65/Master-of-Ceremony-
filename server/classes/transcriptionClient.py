@@ -29,12 +29,14 @@ class TranscriptionClient:
         self.lock = threading.Lock()
         self.fireworks_ws = None
         self.audio_chunks = []
+        self.stop_event = threading.Event()  # New stop event
+        self.streaming_thread  = None
 
     def stream_audio_to_fireworks(self, ws, queue):
         """Stream audio chunks to the WebSocket."""
         print("Starting audio stream...")
 
-        while True:
+        while not self.stop_event.is_set():
             try:
                 chunk = queue.get(timeout=10)
                 self.fireworks_ws.send(chunk, opcode = websocket.ABNF.OPCODE_BINARY)
@@ -44,17 +46,20 @@ class TranscriptionClient:
                 continue
             except Exception as error:
                 print(f"Some error occured while sending audio chunk to fireworks: {error}")
-        
+        print("Audio streaming thread stopped.")
+
     def on_websocket_open(self, ws, queue):
         """Handle WebSocket connection opening."""
         print("WebSocket connected - starting audio stream")
         # Start streaming in a separate thread
-        streaming_thread = threading.Thread(
+        self.streaming_thread = threading.Thread(
             target=self.stream_audio_to_fireworks,
             args=(ws, queue),
             daemon=True
         )
-        streaming_thread.start()
+        self.streaming_thread.start()
+        
+        
 
     def on_websocket_message(self, ws, message):
         """Handle incoming transcription messages."""
@@ -124,3 +129,20 @@ class TranscriptionClient:
             return 1
 
         return 0
+
+    def close(self):
+        """Stop streaming and close the websocket gracefully"""
+        print('Closing transcription client...')
+
+        self.stop_event.set()
+        if self.fireworks_ws:
+            try:
+                self.fireworks_ws.close()
+            except Exception as e:
+                print(f'Error closing WebSocket: {e}')
+        if self.streaming_thread:
+            try:
+                self.streaming_thread.join()
+            except Exception as e:
+                print(f"Error joining streaming thread: {e}")
+        print("Transcription client closed.")

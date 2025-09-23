@@ -65,7 +65,7 @@ export default function MoC() {
 
                       clearTimeout(speakerWaitingTimeoutRef.current);
                       speakerWaitingTimeoutRef.current = null;
-                    }, 30000); // 30s waiting time
+                    }, 4000); // 4s waiting time
                   }
                 } else {
                   if (speakerWaitingTimeoutRef.current) {
@@ -183,7 +183,7 @@ export default function MoC() {
         }}
         className="px-3 py-2 bg-blue-300 hover:bg-pink-500 rounded-md cursor-pointer"
       >
-        Click here to start the ceremony
+        Open Mic
       </button>
       <p className="font-medium text-xl">{notification}</p>
       <audio className="hidden" ref={audioRef}></audio>
