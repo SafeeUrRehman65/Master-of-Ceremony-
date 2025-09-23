@@ -11,7 +11,7 @@ export default function MoC() {
   const speakerWaitingTimeoutRef = useRef(null);
 
   useEffect(() => {
-    const websocket = new WebSocket("ws://localhost:8080/ws");
+    const websocket = new WebSocket(`${import.meta.env.VITE_BACKEND_URL}`);
 
     websocketRef.current = websocket;
 
@@ -43,9 +43,7 @@ export default function MoC() {
                   setNotification("Kindly speak, audience is waiting...");
                   if (!speakerWaitingTimeoutRef.current) {
                     speakerWaitingTimeoutRef.current = setTimeout(() => {
-                      setNotification(
-                        "Speaker is unavailable, moving on to the next speaker"
-                      );
+                      setNotification("Moving on to the next speaker");
                       // notify the server that the speaker is unavailable
                       const response_data = {
                         speakerAvailable: false,
