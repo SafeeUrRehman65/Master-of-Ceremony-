@@ -1,6 +1,11 @@
 import { useRef } from "react";
 
-const SpeechControl = ({ vadRef, websocketRef }) => {
+const SpeechControl = ({
+  vadRef,
+  websocketRef,
+  setNotification,
+  setShowSpeechControl,
+}) => {
   if (!vadRef || !websocketRef) return null;
 
   const speechControlRef = useRef(null);
@@ -10,6 +15,7 @@ const SpeechControl = ({ vadRef, websocketRef }) => {
     if (!vadRef.listening) {
       vadRef.start();
       console.log("Started listening to speaker!");
+      setNotification("Started listening to speaker!");
       data = {
         speaking: true,
       };
@@ -18,6 +24,8 @@ const SpeechControl = ({ vadRef, websocketRef }) => {
       data = {
         speaking: false,
       };
+      setShowSpeechControl(false);
+      setNotification("Stopped listening to speaker!");
     }
     websocketRef?.send(JSON.stringify(data));
   };
@@ -26,7 +34,7 @@ const SpeechControl = ({ vadRef, websocketRef }) => {
     <button
       ref={speechControlRef}
       onClick={toggleVad}
-      className={`speech-control-button py-2 px-3
+      className={`speech-control-button py-2 px-3 rounded-lg cursor-pointer
        ${
          vadRef.listening
            ? "bg-red-300 hover:bg-red-400"

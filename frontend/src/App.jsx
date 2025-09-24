@@ -10,6 +10,7 @@ import CeremonyTable from "./components/CeremonyTable.jsx";
 export default function MoC() {
   const vadRef = useRef(null);
   const websocketRef = useRef(null);
+  const [webSocket, setWebSocket] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [notification, setNotification] = useState(" ");
   const [showWaveform, setShowWaveform] = useState(false);
@@ -20,11 +21,13 @@ export default function MoC() {
   const [currentSpeakerDetails, setCurrentSpeakerDetails] = useState(null);
   const [errorDetails, setErrorDetails] = useState(null);
   const [showErrorBox, setShowErrorBox] = useState(true);
+  const [ceremonyStarted, setCeremonyStarted] = useState(false);
 
   useEffect(() => {
     const websocket = new WebSocket(`${import.meta.env.VITE_BACKEND_URL}`);
 
     websocketRef.current = websocket;
+    setWebSocket(websocket);
 
     websocketRef.current.onopen = () => {
       console.log("Connection established with websocket successfully");
@@ -50,6 +53,11 @@ export default function MoC() {
             if (response_data.phase === "listen") {
               // enable the speech control button
               setShowSpeechControl(true);
+              break;
+            } else if (response_data.phase == "remarks") {
+              setShowSpeechControl(false);
+              setLiveTranscription(null);
+              setCurrentSpeakerDetails(null);
               break;
             }
           }
@@ -148,15 +156,48 @@ export default function MoC() {
       websocketRef.current &&
       websocketRef.current.readyState === WebSocket.OPEN
     ) {
-      console.log(data);
       websocketRef.current?.send(JSON.stringify(data));
+      setCeremonyStarted(true);
     }
   };
   return (
     <div className="flex flex-col items-center gap-y-2 py-3">
-      <div className="title-box">
-        <p className="font-medium text-xl">Master of Ceremony</p>
+      <div className="flex p-4 justify-around w-full">
+        <div className="title-box flex flex-col gap-y-2">
+          <p className="font-medium text-xl">Master of Ceremony</p>
+          {!ceremonyStarted ? (
+            <button
+              disabled={webSocket?.readyState !== 1}
+              onClick={initiateCeremony}
+              className={`px-3 py-2 bg-blue-300 rounded-lg hover:bg-blue-400 ${
+                webSocket?.readyState === 1
+                  ? "cursor-pointer"
+                  : "cursor-not-allowed"
+              }`}
+            >
+              Start ceremony
+            </button>
+          ) : null}
+        </div>
+        <div className="websocket-status-box w-max h-max p-4 border border-black/20 flex flex-col">
+          <p className="text-lg">
+            <strong>WebSocket connection details</strong>
+          </p>
+          <p>
+            <strong>Socket status: </strong>
+            {webSocket?.readyState === 1 ? "initialized" : "uninitialized"}
+          </p>
+          <p>
+            <strong>Microphone recording: </strong>
+            {vadRef.current?.listening === true ? "yes" : "no"}
+          </p>
+          <p>
+            <strong>Websocket URL: </strong>
+            {websocketRef.current?.url ? websocketRef.current.url : "undefined"}
+          </p>
+        </div>
       </div>
+
       {/* <button
         onClick={() => {
           vadRef.current.start();
@@ -165,18 +206,14 @@ export default function MoC() {
       >
         Open your microphone
       </button> */}
-      <button
-        onClick={initiateCeremony}
-        className="px-3 py-2 bg-blue-300 rounded-lg hover:bg-blue-400 cursor-pointer"
-      >
-        Start ceremony
-      </button>
 
       {/* show the speech control button */}
       {showSpeechControl ? (
         <SpeechControl
           vadRef={vadRef.current}
           websocketRef={websocketRef.current}
+          setNotification={setNotification}
+          setShowSpeechControl={setShowSpeechControl}
         />
       ) : null}
 
@@ -189,7 +226,7 @@ export default function MoC() {
         />
       ) : null}
 
-      {currentSpeakerDetails ? (
+      {currentSpeakerDetails || liveTranscription ? (
         <SpeakerModelBox
           speaker_details={currentSpeakerDetails}
           live_transcription={liveTranscription}
