@@ -91,7 +91,9 @@ const AudioVisualizer = ({ audioUrl, websocketRef, setShowWaveform }) => {
 
     return () => {
       cancelAnimationFrame(animationRef.current);
-      audioContext.close();
+      if (audioContext.state !== "closed") {
+        audioContext.close();
+      }
       audio.pause();
       audioRef.current.src = "";
       audioRef.current.load();
