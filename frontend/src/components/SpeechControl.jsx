@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 const SpeechControl = ({ vadRef, websocketRef }) => {
   if (!vadRef || !websocketRef) return null;
 
