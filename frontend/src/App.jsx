@@ -4,8 +4,8 @@ import "./App.css";
 import AudioVisualizer from "./components/AudioVisualizer";
 import SpeechControl from "./components/SpeechControl";
 import ErrorBox from "./components/ErrorBox";
-import CeremonyTable from "./components/ceremonyTable";
 import SpeakerModelBox from "./components/SpeakerModelBox";
+import CeremonyTable from "./components/CeremonyTable.jsx";
 
 export default function MoC() {
   const vadRef = useRef(null);

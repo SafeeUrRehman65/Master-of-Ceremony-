@@ -1,4 +1,4 @@
-const CeremonyTable = ({ ceremony_data }) => {
+export default function CeremonyTable({ ceremony_data }) {
   if (!ceremony_data) return null;
   return (
     <div>
@@ -38,7 +38,7 @@ const CeremonyTable = ({ ceremony_data }) => {
       </div>
     </div>
   );
-};
+}
 
 const TableHeader = () => {
   return (
@@ -58,5 +58,3 @@ const TableHeader = () => {
     </div>
   );
 };
-
-export default CeremonyTable;
