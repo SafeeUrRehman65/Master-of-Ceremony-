@@ -1,14 +1,25 @@
-import { useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useMicVAD } from "@ricky0123/vad-react";
-import { handleAudioError } from "./utils/utilities";
 import "./App.css";
+import AudioVisualizer from "./components/AudioVisualizer";
+import SpeechControl from "./components/SpeechControl";
+import ErrorBox from "./components/ErrorBox";
+import CeremonyTable from "./components/ceremonyTable";
+import SpeakerModelBox from "./components/SpeakerModelBox";
 
 export default function MoC() {
   const vadRef = useRef(null);
   const websocketRef = useRef(null);
-  const audioRef = useRef(null);
+  const [audioUrl, setAudioUrl] = useState(null);
   const [notification, setNotification] = useState(" ");
-  const speakerWaitingTimeoutRef = useRef(null);
+  const [showWaveform, setShowWaveform] = useState(false);
+  const [showCeremonyTable, setShowCeremonyTable] = useState(false);
+  const [ceremonyData, setCeremonyData] = useState(null);
+  const [showSpeechControl, setShowSpeechControl] = useState(false);
+  const [liveTranscription, setLiveTranscription] = useState(null);
+  const [currentSpeakerDetails, setCurrentSpeakerDetails] = useState(null);
+  const [errorDetails, setErrorDetails] = useState(null);
+  const [showErrorBox, setShowErrorBox] = useState(true);
 
   useEffect(() => {
     const websocket = new WebSocket(`${import.meta.env.VITE_BACKEND_URL}`);
@@ -19,11 +30,15 @@ export default function MoC() {
       console.log("Connection established with websocket successfully");
     };
 
-    // attach an onerror event listener to audio source
-    if (audioRef.current) {
-      audioRef.current.onerror = () => {};
-    }
-    websocket.onmessage = (event) => {
+    websocketRef.current.onerror = (error) => {
+      console.error("Some error occured while connecting to websocket:", error);
+    };
+
+    websocketRef.current.onclose = (event) => {
+      console.warn("❌ WebSocket closed", event);
+    };
+
+    websocketRef.current.onmessage = (event) => {
       const response_data = JSON.parse(event.data);
       console.log("Data from backend", response_data);
       const type = response_data.type;
@@ -33,88 +48,42 @@ export default function MoC() {
           if (current_state_message) {
             setNotification(current_state_message);
             if (response_data.phase === "listen") {
-              let speakingCheckInterval = null;
-
-              // check if user has started speaking
-
-              const checkSpeaking = () => {
-                console.log("User speaking", vadRef.current.userSpeaking);
-                if (!vadRef.current.userSpeaking) {
-                  setNotification("Kindly speak, audience is waiting...");
-                  if (!speakerWaitingTimeoutRef.current) {
-                    speakerWaitingTimeoutRef.current = setTimeout(() => {
-                      setNotification("Moving on to the next speaker");
-                      // notify the server that the speaker is unavailable
-                      const response_data = {
-                        speakerAvailable: false,
-                      };
-                      if (
-                        websocketRef.current &&
-                        websocketRef.current.readyState === WebSocket.OPEN
-                      ) {
-                        websocketRef.current.send(
-                          JSON.stringify(response_data)
-                        );
-                      }
-
-                      // clear up interval and timeout
-                      clearInterval(speakingCheckInterval);
-                      speakingCheckInterval = null;
-
-                      clearTimeout(speakerWaitingTimeoutRef.current);
-                      speakerWaitingTimeoutRef.current = null;
-                    }, 4000); // 4s waiting time
-                  }
-                } else {
-                  if (speakerWaitingTimeoutRef.current) {
-                    // clear timeout and cleanup
-                    clearTimeout(speakerWaitingTimeoutRef.current);
-                    speakerWaitingTimeoutRef.current = null;
-                  }
-                  if (notification !== current_state_message) {
-                    setNotification(current_state_message);
-                  }
-                }
-              };
-
-              if (!speakingCheckInterval) {
-                speakingCheckInterval = setInterval(checkSpeaking, 1000);
-              }
+              // enable the speech control button
+              setShowSpeechControl(true);
+              break;
             }
           }
           break;
         case "audio_url":
           const audio_url = response_data.audio_url;
-          if (audioRef.current) {
-            let audioFinished;
-
-            audioRef.current.src = audio_url;
-            audioRef.current.oncanplay = () => {
-              audioRef.current
-                .play()
-                .then(() => console.log("Playing audio"))
-                .catch((error) => console.error("Playback failed:", error));
-            };
-
-            audioRef.current.onended = () => {
-              console.log("Audio finished playing naturally");
-              // flag to send backend to notify audio playback ended
-              audioFinished = true;
-              if (
-                websocketRef.current &&
-                websocketRef.current.readyState === WebSocket.OPEN
-              ) {
-                websocketRef.current.send(
-                  JSON.stringify({
-                    audioFinished: audioFinished,
-                  })
-                );
-                audioFinished = false;
-              }
-            };
-            audioRef.current.onerror = handleAudioError;
-          }
+          if (!audio_url) break;
+          // set audioUrl to manage state
+          setAudioUrl(audio_url);
+          setShowWaveform(true);
           break;
+
+        case "ceremony_data":
+          if (!response_data) break;
+          setCeremonyData(response_data);
+          setShowCeremonyTable(true);
+          break;
+
+        case "speaker_details":
+          if (!response_data) break;
+          setCurrentSpeakerDetails(response_data);
+          break;
+
+        case "transcription":
+          if (!response_data || !response_data.transcription) break;
+          const transcription = response_data.transcription;
+          setLiveTranscription(transcription);
+          break;
+
+        // handle errors
+        case "error":
+          if (!response_data) break;
+          setErrorDetails(response_data);
+          setShowErrorBox(true);
       }
     };
 
@@ -132,6 +101,7 @@ export default function MoC() {
 
   const vad = useMicVAD({
     startOnLoad: false,
+
     onSpeechStart: () => {
       console.log("Speech started");
     },
@@ -170,21 +140,72 @@ export default function MoC() {
     return pcm16.buffer; // Return as ArrayBuffer for WebSocket
   };
 
+  const initiateCeremony = () => {
+    const data = {
+      phase: "initiate",
+    };
+    if (
+      websocketRef.current &&
+      websocketRef.current.readyState === WebSocket.OPEN
+    ) {
+      console.log(data);
+      websocketRef.current?.send(JSON.stringify(data));
+    }
+  };
   return (
     <div className="flex flex-col items-center gap-y-2 py-3">
       <div className="title-box">
         <p className="font-medium text-xl">Master of Ceremony</p>
       </div>
-      <button
+      {/* <button
         onClick={() => {
           vadRef.current.start();
         }}
         className="px-3 py-2 bg-blue-300 hover:bg-pink-500 rounded-md cursor-pointer"
       >
-        Open Mic
+        Open your microphone
+      </button> */}
+      <button
+        onClick={initiateCeremony}
+        className="px-3 py-2 bg-blue-300 rounded-lg hover:bg-blue-400 cursor-pointer"
+      >
+        Start ceremony
       </button>
+
+      {/* show the speech control button */}
+      {showSpeechControl ? (
+        <SpeechControl
+          vadRef={vadRef.current}
+          websocketRef={websocketRef.current}
+        />
+      ) : null}
+
       <p className="font-medium text-xl">{notification}</p>
-      <audio className="hidden" ref={audioRef}></audio>
+      {showWaveform && audioUrl ? (
+        <AudioVisualizer
+          setShowWaveform={setShowWaveform}
+          websocketRef={websocketRef.current}
+          audioUrl={audioUrl}
+        />
+      ) : null}
+
+      {currentSpeakerDetails ? (
+        <SpeakerModelBox
+          speaker_details={currentSpeakerDetails}
+          live_transcription={liveTranscription}
+        />
+      ) : null}
+
+      {showErrorBox ? (
+        <ErrorBox
+          error_details={errorDetails}
+          setShowErrorBox={setShowErrorBox}
+        />
+      ) : null}
+
+      {showCeremonyTable ? (
+        <CeremonyTable ceremony_data={ceremonyData} />
+      ) : null}
     </div>
   );
 }
