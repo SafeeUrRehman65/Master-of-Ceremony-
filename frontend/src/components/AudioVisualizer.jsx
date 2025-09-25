@@ -11,7 +11,7 @@ const AudioVisualizer = ({ audioUrl, websocketRef, setShowWaveform }) => {
   useEffect(() => {
     if (!audioUrl) return;
     const canvas = canvasRef.current;
-    const canvasCtx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
 
     const audio = new Audio(audioUrl);
     audio.crossOrigin = "anonymous";
@@ -23,42 +23,54 @@ const AudioVisualizer = ({ audioUrl, websocketRef, setShowWaveform }) => {
     const analyser = audioContext.createAnalyser();
 
     analyser.fftSize = 2048;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
     source.connect(analyser);
-    analyser.connect(audioContext.destination); // Output the sound
+    analyser.connect(audioContext.destination);
 
     const draw = () => {
       animationRef.current = requestAnimationFrame(draw);
 
-      analyser.getByteTimeDomainData(dataArray);
+      analyser.getByteFrequencyData(dataArray);
 
-      canvasCtx.fillStyle = "black";
-      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      canvasCtx.lineWidth = 2;
-      canvasCtx.strokeStyle = "lime";
-      canvasCtx.beginPath();
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = 60;
 
-      const sliceWidth = canvas.width / bufferLength;
-      let x = 0;
+      const bars = 100;
+      const slice = (2 * Math.PI) / bars;
 
-      for (let i = 0; i < bufferLength; i++) {
-        const v = dataArray[i] / 128.0;
-        const y = (v * canvas.height) / 2;
+      for (let i = 0; i < bars; i++) {
+        const value = dataArray[i];
+        const barLength = value / 4;
 
-        if (i === 0) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
+        const angle = i * slice;
+        const x1 = centerX + radius * Math.cos(angle);
+        const y1 = centerY + radius * Math.sin(angle);
+        const x2 = centerX + (radius + barLength) * Math.cos(angle);
+        const y2 = centerY + (radius + barLength) * Math.sin(angle);
 
-        x += sliceWidth;
+        // Gradient with no transparent background
+        const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+        grad.addColorStop(0, "rgba(53, 82, 197, 1)"); // start solid
+        grad.addColorStop(1, "rgba(0, 200, 255, 1)"); // end solid
+
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // Glow effect
+        // ctx.shadowBlur = 20;
+        // ctx.shadowColor = "rgba(0,255,170,0.8)";
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
       }
-
-      canvasCtx.lineTo(canvas.width, canvas.height / 2);
-      canvasCtx.stroke();
     };
 
     const start = async () => {
@@ -73,18 +85,12 @@ const AudioVisualizer = ({ audioUrl, websocketRef, setShowWaveform }) => {
 
     start();
 
-    // handle audio endings and error
     if (audioRef.current) {
       audioRef.current.onended = () => {
         console.log("Audio finished playing naturally");
         setShowWaveform(false);
-        // flag to send backend to notify audio playback ended
         if (websocketRef && websocketRef.readyState === WebSocket.OPEN) {
-          websocketRef.send(
-            JSON.stringify({
-              audioFinished: true,
-            })
-          );
+          websocketRef.send(JSON.stringify({ audioFinished: true }));
         }
       };
     }
@@ -99,12 +105,8 @@ const AudioVisualizer = ({ audioUrl, websocketRef, setShowWaveform }) => {
       audioRef.current.load();
 
       try {
-        if (sourceRef.current) {
-          sourceRef.current.disconnect();
-        }
-        if (audioContextRef.current) {
-          audioContextRef.current.close();
-        }
+        if (sourceRef.current) sourceRef.current.disconnect();
+        if (audioContextRef.current) audioContextRef.current.close();
       } catch (err) {
         console.warn("error during audio cleanup:", err);
       }
@@ -112,17 +114,21 @@ const AudioVisualizer = ({ audioUrl, websocketRef, setShowWaveform }) => {
   }, [audioUrl, websocketRef]);
 
   return (
-    <div>
-      <div className="flex flex-col gap-y-4">
-        <canvas
-          ref={canvasRef}
-          width={600}
-          height={100}
-          style={{ width: "100%", backgroundColor: "black" }}
-        />
-        <div className="">
-          <p className="text-center font-semibold text-md">Musa Speaking</p>
-        </div>
+    <div className="relative w-[200px] h-[200px] flex items-center justify-center">
+      {/* Canvas - transparent background */}
+      <canvas
+        ref={canvasRef}
+        width={200}
+        height={200}
+        className="absolute top-0 left-0 w-full h-full rounded-full bg-transparent"
+      />
+
+      {/* Hollow circle in center */}
+      <div className="w-[160px] h-[160px] bg-avatar bg-cover rounded-full border-[4px] border-white z-10 bg-black/70"></div>
+
+      {/* Label below */}
+      <div className="absolute bottom-[-40px] text-center font-semibold text-md">
+        <p>Musa Speaking</p>
       </div>
     </div>
   );

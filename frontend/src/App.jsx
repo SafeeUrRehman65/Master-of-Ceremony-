@@ -1,4 +1,5 @@
 import { use, useEffect, useRef, useState } from "react";
+import testAudio from "../src/assets/test_audio.mp3";
 import { useMicVAD } from "@ricky0123/vad-react";
 import "./App.css";
 import AudioVisualizer from "./components/AudioVisualizer";

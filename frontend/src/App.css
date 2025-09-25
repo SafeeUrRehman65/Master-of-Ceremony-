@@ -1,1 +1,5 @@
 @import "tailwindcss";
+
+.bg-avatar {
+  background-image: url("../src/assets/avatar.png");
+}
